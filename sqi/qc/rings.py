@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 
 import numpy as np
 from scipy import ndimage as ndi
@@ -9,83 +9,51 @@ from skimage.segmentation import find_boundaries
 
 
 @dataclass
-class RingConfig:
+class CellProximalConfig:
     """
-    Defines foreground and background regions around each nucleus.
-
-    Design principles:
-    - Foreground (FG): nucleus dilated by fg_dilate_px (captures perinuclear signal)
-    - Background (BG): a ring outside nucleus:
-        between bg_inner_px and bg_outer_px from the nucleus boundary
-    - Exclude overlaps with other nuclei to prevent contamination.
-    - cell_zone_px: radius around any nucleus considered "cell-associated"
+    Defines cell-proximal region.
     """
-    fg_dilate_px: int = 3
-    bg_inner_px: int = 6
-    bg_outer_px: int = 20
-    cell_zone_px: int = 12
+    cell_proximal_px: int = 12
 
+from scipy import ndimage as ndi
+import numpy as np
 
-def _disk_radius_mask(radius: int) -> np.ndarray:
-    r = int(radius)
-    if r <= 0:
-        return np.ones((1, 1), dtype=bool)
-    yy, xx = np.ogrid[-r:r+1, -r:r+1]
-    return (xx * xx + yy * yy) <= r * r
-
-
-def build_fg_bg_masks(
+def build_cell_proximal_and_distal_masks(
     nuclei_labels: np.ndarray,
-    cfg: RingConfig,
-) -> Tuple[np.ndarray, np.ndarray, Dict[str, int]]:
+    valid_mask: np.ndarray,
+    cfg: CellProximalConfig,
+):
     """
-    Build per-pixel FG mask (union across nuclei) and BG mask (union across nuclei).
-    Also returns summary stats for bookkeeping.
-
-    Outputs are boolean masks (H,W).
+    Returns:
+      cell_proximal_mask
+      cell_distal_mask
     """
     if nuclei_labels.ndim != 2:
         raise ValueError("nuclei_labels must be 2D")
 
-    labels = nuclei_labels.astype(np.int32, copy=False)
-    H, W = labels.shape
-    n = int(labels.max())
+    nuclei_bin = nuclei_labels > 0
 
-    nuclei_bin = labels > 0
-
-    # --- FG: dilate nuclei ---
-    fg = ndi.binary_dilation(
+    # Cell-proximal = dilated nuclei
+    cell_proximal = ndi.binary_dilation(
         nuclei_bin,
-        structure=_disk_radius_mask(cfg.fg_dilate_px),
+        structure=np.ones((2 * cfg.cell_proximal_px + 1,
+                            2 * cfg.cell_proximal_px + 1)),
     )
 
-    # --- distance to nearest nucleus ---
-    dist_to_nuclei = ndi.distance_transform_edt(~nuclei_bin)
+    # Restrict to tissue
+    cell_proximal &= valid_mask
 
-    # --- cell-associated zone (union across nuclei) ---
-    cell_zone = ndi.binary_dilation(
-        nuclei_bin,
-        structure=_disk_radius_mask(cfg.cell_zone_px),
-    )
-
-    # --- BG ring ---
-    bg = (dist_to_nuclei >= cfg.bg_inner_px) & (dist_to_nuclei <= cfg.bg_outer_px)
-    bg &= ~fg
-    bg &= ~cell_zone
-
-    # remove label boundaries to avoid edge artifacts
-    boundaries = find_boundaries(labels, mode="thick")
-    bg &= ~boundaries
+    # Cell-distal = tissue but not cell-proximal
+    cell_distal = valid_mask & (~cell_proximal)
 
     stats = {
-        "n_nuclei": n,
-        "fg_px": int(fg.sum()),
-        "bg_px": int(bg.sum()),
-        "img_h": H,
-        "img_w": W,
+        "n_nuclei": int(nuclei_labels.max()),
+        "cell_proximal_px": int(cell_proximal.sum()),
+        "cell_distal_px": int(cell_distal.sum()),
     }
 
-    return fg, bg, stats
+    return cell_proximal, cell_distal, stats
+
 
 
 def per_cell_fg_bg(
@@ -94,15 +62,12 @@ def per_cell_fg_bg(
     bg_union: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Convert union masks into per-cell masks by intersecting with each label's territory.
-
-    For FG per cell: pixels in fg_union that are closest to that nucleus label
-    For BG per cell: pixels in bg_union that are closest to that nucleus label
+    Assign FG/BG pixels to nearest nucleus label (Voronoi by EDT indices).
+    This keeps per-cell accounting possible even when BG is global.
     """
     labels = nuclei_labels.astype(np.int32, copy=False)
     nuclei_bin = labels > 0
 
-    # nearest nucleus assignment via distance transform
     _, (iy, ix) = ndi.distance_transform_edt(~nuclei_bin, return_indices=True)
     nearest_label = labels[iy, ix]
 

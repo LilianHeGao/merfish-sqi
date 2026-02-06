@@ -142,29 +142,6 @@ def visualize_rings_matplotlib(
 
     return ax
 
-def visualize_rings_napari(
-    viewer,
-    nuclei_labels,
-    fg_union,
-    bg_union,
-):
-    """
-    Add FG/BG rings to an existing Napari viewer.
-    """
-    viewer.add_labels(nuclei_labels, name="nuclei")
-
-    viewer.add_labels(
-        fg_union.astype(int),
-        name="FG ring",
-        opacity=0.4,
-    )
-
-    viewer.add_labels(
-        bg_union.astype(int),
-        name="BG ring",
-        opacity=0.4,
-    )
-
 def visualize_nuclei_with_rings_napari(
     dapi: np.ndarray,
     nuclei_labels: np.ndarray,
@@ -204,12 +181,15 @@ def visualize_nuclei_with_rings_napari(
 def visualize_nuclei_rings_and_spots_napari(
     dapi: np.ndarray,
     nuclei_labels: np.ndarray,
-    fg_union: np.ndarray,
-    bg_union: np.ndarray,
+    cell_proximal: np.ndarray,
+    cell_distal: np.ndarray,
     spots_rc: np.ndarray,
     *,
+    valid_mask: np.ndarray | None = None,
     spot_size: float = 4.0,
 ):
+
+
     """
     Visualize DAPI + nuclei + FG/BG rings + RNA spots in Napari.
 
@@ -232,16 +212,22 @@ def visualize_nuclei_rings_and_spots_napari(
 
     # --- FG / BG ---
     viewer.add_labels(
-        fg_union.astype(np.int32),
-        name="FG ring",
+        cell_proximal.astype(np.int32),
+        name="cell_proximal (FG)",
         opacity=0.35,
     )
 
     viewer.add_labels(
-        bg_union.astype(np.int32),
-        name="BG ring",
+        cell_distal.astype(np.int32),
+        name="cell_distal (BG)",
         opacity=0.35,
     )
+    if valid_mask is not None:
+        viewer.add_labels(
+            valid_mask.astype(np.uint8),
+            name="valid_mask (mosaic)",
+            opacity=0.25,
+        )
 
     # --- spots ---
     viewer.add_points(
