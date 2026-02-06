@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-from sqi.io.image_io import read_tif_2d, write_labels_tif
+from sqi.io.image_io import read_tif_2d, read_dapi_from_zarr
 from sqi.segmentation.cellpose_backend import CellposeBackend, CellposeNucleiConfig
 
 
@@ -26,9 +26,18 @@ def main():
         channels=(0, 0),
     )
 
-    img = read_tif_2d(args.dapi)
-    backend = CellposeBackend(cfg)
-    labels, meta = backend.segment_nuclei(img)
+    if args.dapi.endswith(".zarr"):
+        img = read_dapi_from_zarr(
+            args.dapi,
+            channel=-1,
+            scale=0,
+            z_project="max",
+        )
+    else:
+        img = read_tif_2d(args.dapi)
+
+        backend = CellposeBackend(cfg)
+        labels, meta = backend.segment_nuclei(img)
 
     write_labels_tif(str(out_dir / "nuclei_labels.tif"), labels)
     (out_dir / "nuclei_meta.json").write_text(json.dumps(meta, indent=2))
