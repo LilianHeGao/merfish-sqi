@@ -71,7 +71,8 @@ valid_mask = crop_valid_mask_for_fov(
     global_valid_mask=global_valid,
     fov_anchor_xy=anchor_xy,
     fov_shape_hw=labels.shape,
-    anchor_is_upper_left=False#if crop is shifted, switch to False once
+    mosaic_resc=mosaic_cfg.resc,
+    anchor_is_upper_left=False,
 )
 
 cp_cfg = CellProximalConfig(cell_proximal_px=24)
@@ -89,6 +90,7 @@ overlay_bbox_on_mosaic(
     mosaic_img=global_valid.astype(float),
     fov_anchor_xy=anchor_xy,
     fov_shape_hw=labels.shape,
+    mosaic_resc=mosaic_cfg.resc,
     anchor_is_upper_left=False,
 )
 

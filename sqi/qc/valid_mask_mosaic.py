@@ -151,6 +151,7 @@ def crop_valid_mask_for_fov(
     fov_anchor_xy: Tuple[float, float],
     fov_shape_hw: Tuple[int, int],
     *,
+    mosaic_resc: int = 1,
     anchor_is_upper_left: bool = True,
     round_anchor: bool = True,
 ) -> np.ndarray:
@@ -160,11 +161,15 @@ def crop_valid_mask_for_fov(
     Parameters
     ----------
     global_valid_mask:
-        (H_mosaic, W_mosaic) boolean mask.
+        (H_mosaic, W_mosaic) boolean mask, in mosaic pixel space.
     fov_anchor_xy:
-        (x, y) anchor in mosaic pixel coordinates.
+        (x, y) anchor in mosaic pixel coordinates (from compose_mosaic).
     fov_shape_hw:
-        (H_fov, W_fov) in full-resolution pixels.
+        (H_fov, W_fov) in **full-resolution** pixels.
+    mosaic_resc:
+        The rescale factor used to build the mosaic (MosaicBuildConfig.resc).
+        The anchor and the mosaic mask live at this downsampled scale;
+        fov_shape_hw is full-res. We crop at mosaic scale, then upsample.
     anchor_is_upper_left:
         True  -> (x,y) is upper-left corner of FOV in mosaic.
         False -> (x,y) is center of FOV.
@@ -172,12 +177,16 @@ def crop_valid_mask_for_fov(
     Returns
     -------
     valid_mask_fov:
-        (H_fov, W_fov) boolean.  Out-of-bounds = False.
+        (H_fov, W_fov) boolean at full resolution.  Out-of-bounds = False.
     """
     Hm, Wm = global_valid_mask.shape
-    hf, wf = map(int, fov_shape_hw)
-    x, y = fov_anchor_xy
+    hf_full, wf_full = map(int, fov_shape_hw)
 
+    # FOV size in mosaic pixel space
+    hf = hf_full // mosaic_resc
+    wf = wf_full // mosaic_resc
+
+    x, y = fov_anchor_xy
     if round_anchor:
         x = int(round(x))
         y = int(round(y))
@@ -190,20 +199,28 @@ def crop_valid_mask_for_fov(
 
     x1, y1 = x0 + wf, y0 + hf
 
-    out = np.zeros((hf, wf), dtype=bool)
+    crop = np.zeros((hf, wf), dtype=bool)
 
     # Intersection in mosaic coordinates
     mx0, my0 = max(0, x0), max(0, y0)
     mx1, my1 = min(Wm, x1), min(Hm, y1)
 
     if mx1 <= mx0 or my1 <= my0:
-        return out
+        return np.zeros((hf_full, wf_full), dtype=bool)
 
     ox0 = mx0 - x0
     oy0 = my0 - y0
 
-    out[oy0 : oy0 + (my1 - my0), ox0 : ox0 + (mx1 - mx0)] = \
+    crop[oy0 : oy0 + (my1 - my0), ox0 : ox0 + (mx1 - mx0)] = \
         global_valid_mask[my0:my1, mx0:mx1]
+
+    # Upsample to full resolution
+    if mosaic_resc > 1:
+        out = ndi.zoom(crop.astype(np.uint8), mosaic_resc, order=0).astype(bool)
+        out = out[:hf_full, :wf_full]
+    else:
+        out = crop
+
     return out
 
 
@@ -212,13 +229,15 @@ def overlay_bbox_on_mosaic(
     fov_anchor_xy: Tuple[float, float],
     fov_shape_hw: Tuple[int, int],
     *,
+    mosaic_resc: int = 1,
     anchor_is_upper_left: bool = True,
 ) -> "tuple[object, object]":
     """Debug: show FOV bbox on mosaic."""
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
 
-    hf, wf = map(int, fov_shape_hw)
+    hf = int(fov_shape_hw[0]) // mosaic_resc
+    wf = int(fov_shape_hw[1]) // mosaic_resc
     x, y = fov_anchor_xy
     if anchor_is_upper_left:
         x0, y0 = x, y
