@@ -163,56 +163,58 @@ def crop_valid_mask_for_fov(
     global_valid_mask:
         (H_mosaic, W_mosaic) boolean mask, in mosaic pixel space.
     fov_anchor_xy:
-        (x, y) anchor in mosaic pixel coordinates (from compose_mosaic).
+        (dim0, dim1) anchor in mosaic pixel coordinates from compose_mosaic.
+        compose_mosaic convention: x → array dim 0, y → array dim 1.
     fov_shape_hw:
         (H_fov, W_fov) in **full-resolution** pixels.
     mosaic_resc:
         The rescale factor used to build the mosaic (MosaicBuildConfig.resc).
-        The anchor and the mosaic mask live at this downsampled scale;
-        fov_shape_hw is full-res. We crop at mosaic scale, then upsample.
+        Anchor and mask are at mosaic scale; fov_shape_hw is full-res.
     anchor_is_upper_left:
-        True  -> (x,y) is upper-left corner of FOV in mosaic.
-        False -> (x,y) is center of FOV.
+        True  -> anchor is upper-left corner of FOV in mosaic.
+        False -> anchor is center of FOV (compose_mosaic default).
 
     Returns
     -------
     valid_mask_fov:
         (H_fov, W_fov) boolean at full resolution.  Out-of-bounds = False.
     """
-    Hm, Wm = global_valid_mask.shape
+    Hm, Wm = global_valid_mask.shape       # dim0, dim1 of mosaic
     hf_full, wf_full = map(int, fov_shape_hw)
 
     # FOV size in mosaic pixel space
-    hf = hf_full // mosaic_resc
-    wf = wf_full // mosaic_resc
+    hf = hf_full // mosaic_resc             # extent along dim 0
+    wf = wf_full // mosaic_resc             # extent along dim 1
 
-    x, y = fov_anchor_xy
+    # anchor: (dim0_pos, dim1_pos) — following compose_mosaic convention
+    a0, a1 = fov_anchor_xy
     if round_anchor:
-        x = int(round(x))
-        y = int(round(y))
+        a0 = int(round(a0))
+        a1 = int(round(a1))
 
     if anchor_is_upper_left:
-        x0, y0 = x, y
+        r0, c0 = a0, a1
     else:
-        x0 = int(round(x - wf / 2))
-        y0 = int(round(y - hf / 2))
+        r0 = int(round(a0 - hf / 2))       # dim0 center → upper-left
+        c0 = int(round(a1 - wf / 2))       # dim1 center → upper-left
 
-    x1, y1 = x0 + wf, y0 + hf
+    r1, c1 = r0 + hf, c0 + wf
 
     crop = np.zeros((hf, wf), dtype=bool)
 
-    # Intersection in mosaic coordinates
-    mx0, my0 = max(0, x0), max(0, y0)
-    mx1, my1 = min(Wm, x1), min(Hm, y1)
+    # Clip to mosaic bounds
+    mr0 = max(0, r0);  mc0 = max(0, c0)
+    mr1 = min(Hm, r1); mc1 = min(Wm, c1)
 
-    if mx1 <= mx0 or my1 <= my0:
+    if mr1 <= mr0 or mc1 <= mc0:
         return np.zeros((hf_full, wf_full), dtype=bool)
 
-    ox0 = mx0 - x0
-    oy0 = my0 - y0
+    # Offset in output crop
+    or0 = mr0 - r0
+    oc0 = mc0 - c0
 
-    crop[oy0 : oy0 + (my1 - my0), ox0 : ox0 + (mx1 - mx0)] = \
-        global_valid_mask[my0:my1, mx0:mx1]
+    crop[or0 : or0 + (mr1 - mr0), oc0 : oc0 + (mc1 - mc0)] = \
+        global_valid_mask[mr0:mr1, mc0:mc1]
 
     # Upsample to full resolution
     if mosaic_resc > 1:
@@ -232,21 +234,23 @@ def overlay_bbox_on_mosaic(
     mosaic_resc: int = 1,
     anchor_is_upper_left: bool = True,
 ) -> "tuple[object, object]":
-    """Debug: show FOV bbox on mosaic."""
+    """Debug: show FOV bbox on mosaic. Uses matplotlib (col, row) convention."""
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
 
-    hf = int(fov_shape_hw[0]) // mosaic_resc
-    wf = int(fov_shape_hw[1]) // mosaic_resc
-    x, y = fov_anchor_xy
+    hf = int(fov_shape_hw[0]) // mosaic_resc   # dim0 extent
+    wf = int(fov_shape_hw[1]) // mosaic_resc   # dim1 extent
+    a0, a1 = fov_anchor_xy                     # (dim0, dim1)
     if anchor_is_upper_left:
-        x0, y0 = x, y
+        r0, c0 = a0, a1
     else:
-        x0, y0 = x - wf / 2, y - hf / 2
+        r0 = a0 - hf / 2
+        c0 = a1 - wf / 2
 
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(mosaic_img, cmap="gray")
-    ax.add_patch(Rectangle((x0, y0), wf, hf, fill=False, linewidth=2))
+    # matplotlib Rectangle takes (col, row), width, height
+    ax.add_patch(Rectangle((c0, r0), wf, hf, fill=False, linewidth=2, edgecolor="red"))
     ax.set_title("FOV bbox on mosaic")
     ax.set_axis_off()
     return fig, ax
