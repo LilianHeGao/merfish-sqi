@@ -97,6 +97,49 @@ def read_tif_2d(path: str) -> np.ndarray:
 def write_labels_tif(path: str, labels: np.ndarray) -> None:
     tiff.imwrite(path, labels.astype(np.int32), compression="zlib")
 
+def read_multichannel_from_conv_zarr(
+    zarr_path: str,
+    return_pos: bool = False,
+):
+    """
+    Read full multi-channel image from Bintu/Bogdan Conv Zarr layout.
+
+    Returns
+    -------
+    image : dask array, shape (C, Z, Y, X)
+    x, y  : float (only if return_pos=True)
+    """
+    dirname = os.path.dirname(zarr_path)
+    fov = os.path.basename(zarr_path).split("_")[-1].split(".")[0]
+    data_path = os.path.join(dirname, fov, "data")
+    image = da.from_zarr(data_path)[1:]
+
+    shape = image.shape
+    xml_file = os.path.join(
+        dirname, os.path.basename(zarr_path).split(".")[0] + ".xml"
+    )
+    if os.path.exists(xml_file):
+        txt = open(xml_file, "r").read()
+        tag = '<z_offsets type="string">'
+        zstack = txt.split(tag)[-1].split("</")[0]
+
+        tag = '<stage_position type="custom">'
+        x, y = eval(txt.split(tag)[-1].split("</")[0])
+
+        nchannels = int(zstack.split(":")[-1])
+        nzs = (shape[0] // nchannels) * nchannels
+        image = image[:nzs].reshape(
+            shape[0] // nchannels, nchannels, shape[-2], shape[-1]
+        )
+        image = image.swapaxes(0, 1)
+    else:
+        raise RuntimeError("XML metadata not found")
+
+    if return_pos:
+        return image, x, y
+    return image
+
+
 def read_dapi_from_zarr(
     zarr_path: str,
     channel: int = -1,

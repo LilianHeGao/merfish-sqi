@@ -10,7 +10,8 @@ import numpy as np
 from tqdm import tqdm
 
 import tifffile
-import cv2
+
+from sqi.io.image_io import read_multichannel_from_conv_zarr
 
 @dataclass
 class MosaicBuildConfig:
@@ -20,37 +21,6 @@ class MosaicBuildConfig:
     rescz: int = 2
     um_per_pix_native: float = 0.1083333
     force: bool = False
-    th: int = 300            # passed to read_im to fix lazy camera frames
-
-def read_im(path,return_pos=False):
-    import zarr,os
-    from dask import array as da
-    dirname = os.path.dirname(path)
-    fov = os.path.basename(path).split('_')[-1].split('.')[0]
-    #print("Bogdan path:",path)
-    file_ = dirname+os.sep+fov+os.sep+'data'
-    #image = zarr.load(file_)[1:]
-    image = da.from_zarr(file_)[1:]
-
-    shape = image.shape
-    #nchannels = 4
-    xml_file = os.path.dirname(path)+os.sep+os.path.basename(path).split('.')[0]+'.xml'
-    if os.path.exists(xml_file):
-        txt = open(xml_file,'r').read()
-        tag = '<z_offsets type="string">'
-        zstack = txt.split(tag)[-1].split('</')[0]
-        
-        tag = '<stage_position type="custom">'
-        x,y = eval(txt.split(tag)[-1].split('</')[0])
-        
-        nchannels = int(zstack.split(':')[-1])
-        nzs = (shape[0]//nchannels)*nchannels
-        image = image[:nzs].reshape([shape[0]//nchannels,nchannels,shape[-2],shape[-1]])
-        image = image.swapaxes(0,1)
-    shape = image.shape
-    if return_pos:
-        return image,x,y
-    return image
 
 def compose_mosaic(ims,xs_um,ys_um,ims_c=None,um_per_pix=0.108333,rot = 0,return_coords=False):
     dtype = np.float32
@@ -152,7 +122,7 @@ def build_mosaic_and_coords(
 
     for fl in tqdm(fls_, desc="Reading FOVs for mosaic"):
         try:
-            im, x, y = read_im(fl, return_pos=True)
+            im, x, y = read_multichannel_from_conv_zarr(fl, return_pos=True)
 
             if str(cfg.frame).lower() == "all":
                 # (Z,Y,X) after max over z

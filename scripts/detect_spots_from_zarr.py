@@ -2,44 +2,16 @@ import argparse
 import numpy as np
 from skimage.feature import blob_log
 
-def read_im(path,return_pos=False):
-    import zarr,os
-    from dask import array as da
-    dirname = os.path.dirname(path)
-    fov = os.path.basename(path).split('_')[-1].split('.')[0]
-    #print("Bogdan path:",path)
-    file_ = dirname+os.sep+fov+os.sep+'data'
-    #image = zarr.load(file_)[1:]
-    image = da.from_zarr(file_)[1:]
+from sqi.io.image_io import read_multichannel_from_conv_zarr
 
-    shape = image.shape
-    #nchannels = 4
-    xml_file = os.path.dirname(path)+os.sep+os.path.basename(path).split('.')[0]+'.xml'
-    if os.path.exists(xml_file):
-        txt = open(xml_file,'r').read()
-        tag = '<z_offsets type="string">'
-        zstack = txt.split(tag)[-1].split('</')[0]
-        
-        tag = '<stage_position type="custom">'
-        x,y = eval(txt.split(tag)[-1].split('</')[0])
-        
-        nchannels = int(zstack.split(':')[-1])
-        nzs = (shape[0]//nchannels)*nchannels
-        image = image[:nzs].reshape([shape[0]//nchannels,nchannels,shape[-2],shape[-1]])
-        image = image.swapaxes(0,1)
-    shape = image.shape
-    if return_pos:
-        return image,x,y
-    return image
-	
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--zarr", required=True)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
-    # load image: (C, Z, Y, X) or (C, Y, X)
-    im = read_im(args.zarr)
+    im = read_multichannel_from_conv_zarr(args.zarr)
 
     # DAPI is last channel
     spot_channels = im[:-1]

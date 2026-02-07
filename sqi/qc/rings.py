@@ -1,22 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple, Dict, Optional
+from typing import Tuple
 
 import numpy as np
 from scipy import ndimage as ndi
-from skimage.segmentation import find_boundaries
 
 
 @dataclass
 class CellProximalConfig:
     """
-    Defines cell-proximal region.
+    Defines cell-proximal region (FG) via binary dilation of all nuclei.
+    cell_proximal_px: dilation radius in pixels.
     """
     cell_proximal_px: int = 12
 
-from scipy import ndimage as ndi
-import numpy as np
 
 def build_cell_proximal_and_distal_masks(
     nuclei_labels: np.ndarray,
@@ -24,9 +22,13 @@ def build_cell_proximal_and_distal_masks(
     cfg: CellProximalConfig,
 ):
     """
+    FG = union of dilated nuclei (cell-proximal), clipped to valid tissue.
+    BG = valid tissue minus FG (cell-distal).
+
     Returns:
-      cell_proximal_mask
-      cell_distal_mask
+      cell_proximal_mask  (bool, same shape)
+      cell_distal_mask    (bool, same shape)
+      stats               dict with counts
     """
     if nuclei_labels.ndim != 2:
         raise ValueError("nuclei_labels must be 2D")
@@ -37,7 +39,7 @@ def build_cell_proximal_and_distal_masks(
     cell_proximal = ndi.binary_dilation(
         nuclei_bin,
         structure=np.ones((2 * cfg.cell_proximal_px + 1,
-                            2 * cfg.cell_proximal_px + 1)),
+                           2 * cfg.cell_proximal_px + 1)),
     )
 
     # Restrict to tissue
@@ -55,15 +57,14 @@ def build_cell_proximal_and_distal_masks(
     return cell_proximal, cell_distal, stats
 
 
-
 def per_cell_fg_bg(
     nuclei_labels: np.ndarray,
     fg_union: np.ndarray,
     bg_union: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Assign FG/BG pixels to nearest nucleus label (Voronoi by EDT indices).
-    This keeps per-cell accounting possible even when BG is global.
+    Assign FG/BG pixels to nearest nucleus label (Voronoi by EDT).
+    Keeps per-cell accounting possible even when BG is global.
     """
     labels = nuclei_labels.astype(np.int32, copy=False)
     nuclei_bin = labels > 0

@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Tuple, Optional, Sequence, Union
+from typing import Tuple
 
 import os
+import hashlib
+import json
 import numpy as np
 from scipy import ndimage as ndi
 from skimage.filters import threshold_otsu
-from skimage.morphology import binary_closing, disk, remove_small_objects
+from skimage.morphology import closing, disk, remove_small_objects
 
 
 try:
@@ -17,44 +19,53 @@ except Exception:  # pragma: no cover
     tifffile = None
 
 
-ArrayLike = Union[np.ndarray]
-
 @dataclass
 class MosaicValidMaskConfig:
-    closing_radius: int = 30
-    min_object_size: int = 50_000
+    """
+    All spatial parameters are in FULL-RESOLUTION pixels.
+    They are auto-scaled when downsample > 1.
+    """
+    closing_radius: int = 30          # full-res pixels
+    min_object_size: int = 50_000     # full-res pixels
     fill_holes: bool = True
     bg_percentile: float = 1.0
     hi_percentile: float = 99.8
     use_otsu_on_nonzero: bool = True
-
-    # speed knob
-    downsample: int = 4   # compute mask on downsampled mosaic, then upsample
+    downsample: int = 4
 
 
-def compute_global_valid_mask_from_mosaic(mosaic_img: np.ndarray, cfg: MosaicValidMaskConfig) -> np.ndarray:
+def compute_global_valid_mask_from_mosaic(
+    mosaic_img: np.ndarray,
+    cfg: MosaicValidMaskConfig,
+) -> np.ndarray:
     if mosaic_img.ndim != 2:
         raise ValueError("mosaic_img must be 2D")
 
     m = mosaic_img.astype(np.float32, copy=False)
+    full_shape = m.shape
 
-    # optional downsample for speed
-    ds = int(cfg.downsample) if cfg.downsample else 1
-    print(f"[valid_mask] downsample = {cfg.downsample}")
+    # --- downsample ---
+    ds = max(1, int(cfg.downsample))
     if ds > 1:
         m_small = m[::ds, ::ds]
     else:
         m_small = m
 
+    # Scale spatial parameters to downsampled space
+    closing_r = max(1, cfg.closing_radius // ds)
+    min_obj = max(1, cfg.min_object_size // (ds * ds))
+
+    # --- normalize nonzero pixels ---
     nz = m_small[m_small > 0]
     if nz.size == 0:
-        return np.zeros_like(m, dtype=bool)
+        return np.zeros(full_shape, dtype=bool)
 
     lo = np.percentile(nz, cfg.bg_percentile)
     hi = np.percentile(nz, cfg.hi_percentile)
     denom = (hi - lo) if (hi > lo) else 1.0
     mn = np.clip((m_small - lo) / (denom + 1e-6), 0, 1)
 
+    # --- threshold ---
     if cfg.use_otsu_on_nonzero:
         t = threshold_otsu(mn[m_small > 0])
     else:
@@ -62,38 +73,45 @@ def compute_global_valid_mask_from_mosaic(mosaic_img: np.ndarray, cfg: MosaicVal
 
     valid = mn > t
 
-    if cfg.closing_radius and cfg.closing_radius > 0:
-        valid = binary_closing(valid, footprint=disk(int(cfg.closing_radius)))
+    # --- morphological cleanup (in downsampled space) ---
+    if closing_r > 0:
+        valid = closing(valid, footprint=disk(closing_r))
 
-    if cfg.min_object_size and cfg.min_object_size > 0:
-        valid = remove_small_objects(valid, min_size=int(cfg.min_object_size))
+    if min_obj > 0:
+        valid = remove_small_objects(valid, max_size=min_obj)
 
     if cfg.fill_holes:
         valid = ndi.binary_fill_holes(valid)
 
-    # upsample back to full resolution if downsampled
+    # --- upsample back to full resolution ---
     if ds > 1:
-        valid = np.repeat(np.repeat(valid, ds, axis=0), ds, axis=1)
-        valid = valid[: m.shape[0], : m.shape[1]]
+        valid = ndi.zoom(valid.astype(np.uint8), ds, order=0).astype(bool)
+        valid = valid[: full_shape[0], : full_shape[1]]
 
-    return valid.astype(bool)
+    return valid
 
 
-def _mask_cache_path(cache_root: str, mosaic_tif_path: str) -> str:
+def _cfg_hash(cfg: MosaicValidMaskConfig) -> str:
+    """Short hash of config so cache invalidates when parameters change."""
+    d = {
+        "closing_radius": cfg.closing_radius,
+        "min_object_size": cfg.min_object_size,
+        "fill_holes": cfg.fill_holes,
+        "bg_percentile": cfg.bg_percentile,
+        "hi_percentile": cfg.hi_percentile,
+        "use_otsu_on_nonzero": cfg.use_otsu_on_nonzero,
+        "downsample": cfg.downsample,
+    }
+    h = hashlib.md5(json.dumps(d, sort_keys=True).encode()).hexdigest()[:8]
+    return h
+
+
+def _mask_cache_path(cache_root: str, mosaic_tif_path: str, cfg: MosaicValidMaskConfig) -> str:
     os.makedirs(cache_root, exist_ok=True)
     base = os.path.basename(mosaic_tif_path).replace(".tif", "").replace(".tiff", "")
-    return os.path.join(cache_root, base + "_valid_mask.tiff")
+    return os.path.join(cache_root, f"{base}_valid_mask_{_cfg_hash(cfg)}.tiff")
 
-def load_mosaic_tiff(path: str) -> np.ndarray:
-    """
-    Load a mosaic TIFF as float32 array.
-    """
-    if tifffile is None:
-        raise ImportError("tifffile is required to read TIFF mosaics (pip install tifffile).")
-    img = tifffile.imread(path)
-    return img.astype(np.float32, copy=False)
 
-	
 def load_or_compute_global_valid_mask(
     mosaic_tif_path: str,
     cache_root: str,
@@ -102,10 +120,11 @@ def load_or_compute_global_valid_mask(
     force: bool = False,
 ) -> np.ndarray:
     """
-    Loads cached valid mask if present; otherwise computes from mosaic TIFF and caches it
-    in cache_root (NOT alongside the data).
+    Loads cached valid mask if present; otherwise computes from mosaic TIFF
+    and caches it in cache_root (NOT alongside the data).
+    Cache key includes config parameters.
     """
-    cache_path = _mask_cache_path(cache_root, mosaic_tif_path)
+    cache_path = _mask_cache_path(cache_root, mosaic_tif_path, cfg)
 
     if (not force) and os.path.exists(cache_path):
         return tifffile.imread(cache_path).astype(bool)
@@ -117,47 +136,10 @@ def load_or_compute_global_valid_mask(
     return valid
 
 
-
 def save_mask_tiff(path: str, mask: np.ndarray) -> None:
-    """
-    Save boolean mask as uint8 TIFF (0/1).
-    """
     if tifffile is None:
-        raise ImportError("tifffile is required to write TIFF masks (pip install tifffile).")
+        raise ImportError("tifffile is required (pip install tifffile).")
     tifffile.imwrite(path, mask.astype(np.uint8))
-
-
-def fov_id_from_zarr_path(zarr_path: str) -> str:
-    """
-    Extract fov id from ...Conv_zscan1_074.zarr -> "074"
-    (matches your existing naming scheme)
-    """
-    base = zarr_path.replace("\\", "/").split("/")[-1]
-    # Conv_zscan1_074.zarr -> "074"
-    return base.split("_")[-1].split(".")[0]
-
-
-def build_fov_anchor_index(
-    fov_paths: Sequence[str],
-    xs: Sequence[float],
-    ys: Sequence[float],
-) -> Dict[str, Tuple[float, float]]:
-    """
-    Build mapping: fov_id -> (x_anchor, y_anchor) in *mosaic coordinate system*,
-    using the outputs you already get from compose_mosaic(return_coords=True).
-
-    IMPORTANT:
-      This function is agnostic to whether xs/ys are px or already scaled;
-      it just stores whatever compose_mosaic returned. Use crop_valid_mask_for_fov()
-      with the same coordinate conventions.
-    """
-    if not (len(fov_paths) == len(xs) == len(ys)):
-        raise ValueError("fov_paths, xs, ys must have the same length")
-
-    idx: Dict[str, Tuple[float, float]] = {}
-    for p, x, y in zip(fov_paths, xs, ys):
-        idx[fov_id_from_zarr_path(p)] = (float(x), float(y))
-    return idx
 
 
 def crop_valid_mask_for_fov(
@@ -176,21 +158,17 @@ def crop_valid_mask_for_fov(
     global_valid_mask:
         (H_mosaic, W_mosaic) boolean mask.
     fov_anchor_xy:
-        (x, y) anchor location in mosaic coordinates, matching compose_mosaic return_coords.
-        If anchor_is_upper_left=True, (x,y) is interpreted as the upper-left corner of the FOV in mosaic space.
-        If anchor_is_upper_left=False, (x,y) is interpreted as the center of the FOV.
+        (x, y) anchor in mosaic pixel coordinates.
     fov_shape_hw:
-        (H_fov, W_fov) in pixels (same orientation as the mask you want to apply to your FOV arrays).
+        (H_fov, W_fov) in full-resolution pixels.
     anchor_is_upper_left:
-        Set True if compose_mosaic returns top-left placement coordinates (common).
-        If False, we'll treat anchor as center.
-    round_anchor:
-        If True, cast anchor to int via rounding.
+        True  -> (x,y) is upper-left corner of FOV in mosaic.
+        False -> (x,y) is center of FOV.
 
     Returns
     -------
     valid_mask_fov:
-        (H_fov, W_fov) boolean. Out-of-bounds regions are filled with False.
+        (H_fov, W_fov) boolean.  Out-of-bounds = False.
     """
     Hm, Wm = global_valid_mask.shape
     hf, wf = map(int, fov_shape_hw)
@@ -206,32 +184,25 @@ def crop_valid_mask_for_fov(
         x0 = int(round(x - wf / 2))
         y0 = int(round(y - hf / 2))
 
-    # Compute crop with bounds checking
     x1, y1 = x0 + wf, y0 + hf
 
-    # Create output initialized to False
     out = np.zeros((hf, wf), dtype=bool)
 
     # Intersection in mosaic coordinates
-    mx0 = max(0, x0)
-    my0 = max(0, y0)
-    mx1 = min(Wm, x1)
-    my1 = min(Hm, y1)
+    mx0, my0 = max(0, x0), max(0, y0)
+    mx1, my1 = min(Wm, x1), min(Hm, y1)
 
     if mx1 <= mx0 or my1 <= my0:
-        return out  # entirely out of bounds
+        return out
 
-    # Corresponding region in output
     ox0 = mx0 - x0
     oy0 = my0 - y0
-    ox1 = ox0 + (mx1 - mx0)
-    oy1 = oy0 + (my1 - my0)
 
-    out[oy0:oy1, ox0:ox1] = global_valid_mask[my0:my1, mx0:mx1]
+    out[oy0 : oy0 + (my1 - my0), ox0 : ox0 + (mx1 - mx0)] = \
+        global_valid_mask[my0:my1, mx0:mx1]
     return out
 
 
-# --- Optional quick visualization helper (debug only) ---
 def overlay_bbox_on_mosaic(
     mosaic_img: np.ndarray,
     fov_anchor_xy: Tuple[float, float],
@@ -239,10 +210,7 @@ def overlay_bbox_on_mosaic(
     *,
     anchor_is_upper_left: bool = True,
 ) -> "tuple[object, object]":
-    """
-    Debug helper to visually confirm the FOV crop location in the mosaic.
-    Returns (fig, ax).
-    """
+    """Debug: show FOV bbox on mosaic."""
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
 

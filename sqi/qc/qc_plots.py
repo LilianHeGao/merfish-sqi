@@ -4,7 +4,6 @@ from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Dict, Optional
-import napari
 
 # ---------------------------
 # SQI DISTRIBUTIONS
@@ -142,42 +141,6 @@ def visualize_rings_matplotlib(
 
     return ax
 
-def visualize_nuclei_with_rings_napari(
-    dapi: np.ndarray,
-    nuclei_labels: np.ndarray,
-    fg_union: np.ndarray,
-    bg_union: np.ndarray,
-):
-    """
-    Visualize nuclei + FG/BG rings in Napari, matching existing nuclei checks.
-    """
-    viewer = napari.Viewer()
-
-    viewer.add_image(
-        dapi,
-        name="DAPI",
-        contrast_limits=[0, np.percentile(dapi, 99.8)],
-    )
-
-    viewer.add_labels(
-        nuclei_labels.astype(np.int32),
-        name="nuclei",
-    )
-
-    viewer.add_labels(
-        fg_union.astype(np.int32),
-        name="FG ring",
-        opacity=0.4,
-    )
-
-    viewer.add_labels(
-        bg_union.astype(np.int32),
-        name="BG ring",
-        opacity=0.4,
-    )
-
-    napari.run()
-
 def visualize_nuclei_rings_and_spots_napari(
     dapi: np.ndarray,
     nuclei_labels: np.ndarray,
@@ -195,6 +158,7 @@ def visualize_nuclei_rings_and_spots_napari(
 
     spots_rc: (N, 2) array in (row, col) order
     """
+    import napari
     viewer = napari.Viewer()
 
     # --- DAPI ---

@@ -5,48 +5,59 @@ from pathlib import Path
 import numpy as np
 import tifffile as tiff
 
-from sqi.io.image_io import read_tif_2d
-from sqi.qc.rings import RingConfig, build_fg_bg_masks, per_cell_fg_bg
-from sqi.qc.qc_plots import QC1Config, compute_per_cell_stats, plot_qc1
+from sqi.qc.rings import CellProximalConfig, build_cell_proximal_and_distal_masks, per_cell_fg_bg
+from sqi.qc.metrics import compute_sqi_from_label_maps
+from sqi.qc.qc_plots import plot_sqi_distribution
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--intensity", required=True, help="RNA-like channel 2D tif (for QC1)")
     ap.add_argument("--labels", required=True, help="nuclei_labels.tif")
+    ap.add_argument("--spots", required=True, help="spots_rc.npy (N,2)")
+    ap.add_argument("--valid_mask", required=True, help="valid_mask.tif (mosaic-level, cropped to FOV)")
     ap.add_argument("--out_dir", required=True)
-    ap.add_argument("--fg_dilate", type=int, default=3)
-    ap.add_argument("--bg_inner", type=int, default=6)
-    ap.add_argument("--bg_outer", type=int, default=20)
+    ap.add_argument("--cell_proximal_px", type=int, default=12)
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    intensity = read_tif_2d(args.intensity).astype(np.float32, copy=False)
     labels = tiff.imread(args.labels).astype(np.int32, copy=False)
+    spots_rc = np.load(args.spots).astype(np.int32)
+    valid_mask = tiff.imread(args.valid_mask).astype(bool)
 
-    ring_cfg = RingConfig(
-        fg_dilate_px=args.fg_dilate,
-        bg_inner_px=args.bg_inner,
-        bg_outer_px=args.bg_outer,
-    )
+    # Build FG / BG
+    cfg = CellProximalConfig(cell_proximal_px=args.cell_proximal_px)
+    fg_mask, bg_mask, region_stats = build_cell_proximal_and_distal_masks(labels, valid_mask, cfg)
 
-    fg_union, bg_union, ring_stats = build_fg_bg_masks(labels, ring_cfg)
-    fg_label_map, bg_label_map = per_cell_fg_bg(labels, fg_union, bg_union)
+    # Per-cell label maps
+    fg_label_map, bg_label_map = per_cell_fg_bg(labels, fg_mask, bg_mask)
 
-    stats = compute_per_cell_stats(intensity, labels, fg_label_map, bg_label_map)
-    fig, summary = plot_qc1(stats, QC1Config(out_png=str(out_dir / "sqi_qc1_fg_bg_ratio.png")))
+    # Compute SQI
+    sqi, _, _ = compute_sqi_from_label_maps(fg_label_map, bg_label_map, spots_rc)
 
-    fig.savefig(out_dir / "sqi_qc1_fg_bg_ratio.png")
-    (out_dir / "sqi_qc1_summary.json").write_text(json.dumps({**ring_stats, **summary}, indent=2))
+    # Plot
+    ax = plot_sqi_distribution(sqi, title="SQI distribution (cell-proximal / cell-distal)")
+    fig = ax.get_figure()
+    fig.tight_layout()
+    fig.savefig(out_dir / "sqi_distribution.png", dpi=200)
 
-    # Optional debug outputs (handy in napari)
-    tiff.imwrite(out_dir / "fg_union.tif", fg_union.astype(np.uint8) * 255, compression="zlib")
-    tiff.imwrite(out_dir / "bg_union.tif", bg_union.astype(np.uint8) * 255, compression="zlib")
+    # Save summary
+    vals = np.array([v for v in sqi.values() if np.isfinite(v)])
+    summary = {
+        **region_stats,
+        "n_cells_with_sqi": len(vals),
+        "median_sqi": float(np.median(vals)) if len(vals) else None,
+        "mean_log10_sqi": float(np.mean(np.log10(vals))) if len(vals) else None,
+    }
+    (out_dir / "sqi_summary.json").write_text(json.dumps(summary, indent=2))
 
-    print("Saved QC plot:", out_dir / "sqi_qc1_fg_bg_ratio.png")
-    print("Saved summary:", out_dir / "sqi_qc1_summary.json")
+    # Debug masks
+    tiff.imwrite(str(out_dir / "fg_mask.tif"), fg_mask.astype(np.uint8), compression="zlib")
+    tiff.imwrite(str(out_dir / "bg_mask.tif"), bg_mask.astype(np.uint8), compression="zlib")
+
+    print("Saved:", out_dir / "sqi_distribution.png")
+    print("Summary:", json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
