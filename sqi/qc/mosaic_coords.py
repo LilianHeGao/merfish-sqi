@@ -118,7 +118,6 @@ def _mosaic_cache_paths(
     return mosaic_tif, coords_npz
 
 
-
 def build_mosaic_and_coords(
     data_fld: str,
     cfg: MosaicBuildConfig,
@@ -179,19 +178,19 @@ def build_mosaic_and_coords(
 
     um_per_pix = cfg.um_per_pix_native * cfg.resc
 
-    mosaic_img, xs, ys = compose_mosaic(
-        tiles,
-        xs_um,
-        ys_um,
-        ims_c=None,
-        um_per_pix=um_per_pix,
-        rot=0,
-        return_coords=True,
-    )
+    mosaic_img, xs_center_pix, ys_center_pix = compose_mosaic(
+		tiles,
+		xs_um,
+		ys_um,
+		ims_c=None,
+		um_per_pix=um_per_pix,
+		rot=0,
+		return_coords=True,
+	)
 
     mosaic_img = mosaic_img.astype(np.float32, copy=False)
-    xs = np.array(xs, dtype=np.float32)
-    ys = np.array(ys, dtype=np.float32)
+    xs = np.array(xs_center_pix, dtype=np.float32)
+    ys = np.array(ys_center_pix, dtype=np.float32)
 
     # Cache
     if cache:
@@ -201,8 +200,7 @@ def build_mosaic_and_coords(
         print("[mosaic] Saved:", coords_npz)
 
     return mosaic_img, fls_, xs, ys
-
-
+	
 def fov_id_from_zarr_path(zarr_path: str) -> str:
     base = os.path.basename(zarr_path)
     return base.split("_")[-1].split(".")[0]

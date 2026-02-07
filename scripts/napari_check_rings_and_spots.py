@@ -6,7 +6,7 @@ from sqi.qc.rings import CellProximalConfig, build_cell_proximal_and_distal_mask
 from sqi.qc.qc_plots import visualize_nuclei_rings_and_spots_napari
 
 from sqi.qc.mosaic_coords import build_mosaic_and_coords, build_fov_anchor_index, fov_id_from_zarr_path, MosaicBuildConfig
-from sqi.qc.valid_mask_mosaic import load_or_compute_global_valid_mask, MosaicValidMaskConfig, crop_valid_mask_for_fov
+from sqi.qc.valid_mask_mosaic import load_or_compute_global_valid_mask, MosaicValidMaskConfig, crop_valid_mask_for_fov, overlay_bbox_on_mosaic
 
 # --------------------------------------------------
 # PATHS (your dataset)
@@ -71,7 +71,7 @@ valid_mask = crop_valid_mask_for_fov(
     global_valid_mask=global_valid,
     fov_anchor_xy=anchor_xy,
     fov_shape_hw=labels.shape,
-    anchor_is_upper_left=True,  # if crop is shifted, switch to False once
+    anchor_is_upper_left=False#if crop is shifted, switch to False once
 )
 
 cp_cfg = CellProximalConfig(cell_proximal_px=24)
@@ -83,6 +83,14 @@ cell_proximal, cell_distal, stats = build_cell_proximal_and_distal_masks(
 )
 
 print("Region stats:", stats)
+
+# ---- DEBUG: visualize FOV bbox on mosaic (run once) ----
+overlay_bbox_on_mosaic(
+    mosaic_img=global_valid.astype(float),
+    fov_anchor_xy=anchor_xy,
+    fov_shape_hw=labels.shape,
+    anchor_is_upper_left=False,
+)
 
 # --------------------------------------------------
 # VISUALIZE
