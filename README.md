@@ -4,12 +4,12 @@
 
 ---
 
-# SQI – imaging-based sample quality control for smFISH
+# SQI – imaging-based sample quality control for smFISH / MERFISH
 
 **SQI (Sample Quality Index)** is a modular, image-derived quality control (QC) framework for
 **smFISH and MERFISH spatial transcriptomics data**.
 
-Unlike molecule-level chemistry or probe-centric pipelines, SQI focuses on **biological sample–level
+Unlike molecule-level chemistry or probe-centric pipelines, SQI focuses on **biological sample-level
 integrity**, quantifying RNA quality, spatial signal structure, and tissue organization directly
 from imaging features.
 
@@ -31,47 +31,97 @@ downstream biological interpretation.
 SQI addresses this gap by providing a **modular QC stack** that operates directly in image space,
 enabling:
 
-- early identification of low-quality or compromised samples
-- comparison of RNA quality across samples and experiments
-- reproducible, interpretable QC metrics at both **dataset** and **cell** levels
+- Early identification of low-quality or compromised samples
+- Comparison of RNA quality across samples and experiments
+- Reproducible, interpretable QC metrics at both **dataset** and **cell** levels
 
 ---
 
-## Key design principles
+## How it works
 
-- **Sample-level first**  
-  QC metrics are defined at the biological sample level, rather than individual FOVs or spots.
+For each cell in a FOV, SQI computes a per-cell **signal-to-noise ratio** from RNA spot densities:
 
-- **Imaging-native**  
-  All metrics are computed from image-derived features (spots, masks, spatial structure).
+```
+SQI(cell) = spot_density(cell-proximal) / spot_density(cell-distal)
+```
 
-- **Modular and extensible**  
-  Each QC component can be enabled, disabled, or replaced independently.
+- **Cell-proximal (FG)**: a dilated ring around each nucleus — where real RNA signal concentrates.
+- **Cell-distal (BG)**: valid tissue far from any nucleus — representing background noise / degraded RNA.
 
-- **Method-agnostic**  
-  Compatible with multiple spot-calling, segmentation, and imaging platforms.
+High SQI means RNA is concentrated near cells (good sample). SQI near 1 means RNA is diffusely spread (degraded sample).
+
+### Pipeline
+
+1. **DAPI loading** — read the nuclear channel from a per-FOV `.zarr`
+2. **Nuclei segmentation** — Cellpose (`segmentation/cellpose_backend.py`)
+3. **Tissue mask** — mosaic-level valid-tissue mask, cropped per FOV
+4. **FG / BG masks** — binary dilation of nuclei → cell-proximal ring; remainder → cell-distal. Per-cell assignment via Voronoi (EDT)
+5. **Spot detection** — Spotiflow, per channel (`sqi/spot_calling/`)
+6. **Spot features & quality scoring** — SNR, symmetry, intensity → composite `q_score` with conservative / permissive gates (`sqi/spot_features/`)
+7. **SQI computation** — quality-weighted FG/BG density ratio per cell (`sqi/qc/metrics.py`)
+8. **Sanity check** — null-model comparison: uniformly sampled pseudo-spots vs real spots. Clear separation validates the metric (`sqi/qc/metrics.py::sqi_sanity_check`)
+
+### Outputs
+
+| File | Description |
+|------|-------------|
+| `sqi_summary.json` | FOV-level summary (median SQI, mean log10 SQI, per-channel breakdown) |
+| `sqi_per_cell.csv` | Per-cell SQI, FG/BG spot counts |
+| `sqi_per_cell_per_channel.csv` | Per-cell per-channel SQI |
+| `sqi_distribution.png` | log10(SQI) histograms (per-channel + total) |
+| `sqi_sanity_check.png` | Real vs null SQI distribution overlay |
+
+<!-- TODO: add example output images -->
 
 ---
 
-## QC modules (high level)
+## Project structure
 
-| Module | Description |
-|------|------------|
-| Tissue / foreground detection | Construction of tissue-aware valid masks |
-| Spot statistics | Density, intensity, and spatial consistency |
-| Cell-level aggregation | Per-cell RNA signal quality metrics |
-| Spatial structure | Local clustering and neighborhood coherence |
-| Dataset summary | Sample-level SQI scores and diagnostics |
+```
+sqi/
+  io/              Image & spots I/O (tiff, zarr, parquet)
+  qc/              QC core: FG/BG masks, SQI metrics, sanity check, plotting
+  spot_calling/    Spotiflow backend
+  spot_features/   Per-spot feature extraction & quality scoring
+  spatial/         Spatial structure analysis
+segmentation/      Cellpose nuclei segmentation backend
+scripts/           End-to-end pipelines & visualization helpers
+configs/           Configuration files
+```
 
 ---
 
 ## Quickstart
 
 ```bash
-# create environment (example)
 conda create -n sqi python=3.11 -y
 conda activate sqi
 
-pip install -r requirements.txt
+pip install -e .
+```
 
-python run_sqi.py
+### Run on a single FOV
+
+```bash
+python scripts/run_sqi_from_fov_zarr.py \
+  --fov_zarr  /path/to/Conv_zscan1_XXX.zarr \
+  --data_fld  /path/to/parent_folder_with_all_zarrs \
+  --cache_root /path/to/cache \
+  --out_root   /path/to/output
+```
+
+Optional flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--resc` | 4 | Mosaic rescale factor |
+| `--cell_proximal_px` | 24 | Dilation radius (px) for cell-proximal region |
+| `--spot_model` | `general` | Spotiflow pretrained model |
+| `--prob_thresh` | 0.5 | Spotiflow probability threshold |
+| `--force` | off | Recompute all cached intermediates |
+
+---
+
+## Dependencies
+
+numpy, scipy, scikit-image, matplotlib, tifffile, zarr, cellpose, spotiflow, pandas, pyarrow

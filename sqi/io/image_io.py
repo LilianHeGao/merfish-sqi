@@ -10,6 +10,19 @@ import os
 from dask import array as da
 
 
+def _resolve_fov_data_path(dirname: str, fov: str) -> str:
+    """Try both '040/data' and '40/data' (with/without leading zeros)."""
+    candidates = [fov, fov.lstrip("0") or "0"]
+    for f in candidates:
+        p = os.path.join(dirname, f, "data")
+        if os.path.exists(p):
+            return p
+    raise FileNotFoundError(
+        f"Expected data directory not found. Tried: "
+        + ", ".join(os.path.join(dirname, f, "data") for f in candidates)
+    )
+
+
 def read_dapi_from_conv_zarr(
     zarr_path: str,
     channel: int = -1,
@@ -38,10 +51,7 @@ def read_dapi_from_conv_zarr(
     dirname = os.path.dirname(zarr_path)
     fov = os.path.basename(zarr_path).split("_")[-1].split(".")[0]
 
-    data_path = os.path.join(dirname, fov, "data")
-
-    if not os.path.exists(data_path):
-        raise FileNotFoundError(f"Expected data directory not found: {data_path}")
+    data_path = _resolve_fov_data_path(dirname, fov)
 
     # Load lazily (dask), skip first frame as in original pipeline
     image = da.from_zarr(data_path)[1:]
@@ -111,7 +121,7 @@ def read_multichannel_from_conv_zarr(
     """
     dirname = os.path.dirname(zarr_path)
     fov = os.path.basename(zarr_path).split("_")[-1].split(".")[0]
-    data_path = os.path.join(dirname, fov, "data")
+    data_path = _resolve_fov_data_path(dirname, fov)
     image = da.from_zarr(data_path)[1:]
 
     shape = image.shape
