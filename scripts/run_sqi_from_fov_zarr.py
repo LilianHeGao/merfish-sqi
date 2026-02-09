@@ -27,7 +27,7 @@ from sqi.io.image_io import (
 from sqi.io.spots_io import read_spots_parquet, write_spots_parquet, write_spots_meta
 from segmentation.cellpose_backend import CellposeBackend, CellposeNucleiConfig
 from sqi.qc.mosaic_coords import (
-    build_mosaic_and_coords, build_fov_anchor_index,
+    build_mosaic_and_coords, build_fov_anchor_index, lookup_fov_anchor,
     fov_id_from_zarr_path, MosaicBuildConfig, mosaic_cache_paths,
 )
 from sqi.qc.valid_mask_mosaic import crop_valid_mask_for_fov
@@ -208,7 +208,7 @@ def main(args):
     # =====================================================
     print("[4/7] Cropping tissue mask for FOV ...")
     fov_index = build_fov_anchor_index(fls_, xs, ys)
-    anchor_xy = fov_index[fov_id]
+    anchor_xy = lookup_fov_anchor(fov_index, fov_id)
 
     valid_mask = crop_valid_mask_for_fov(
         global_valid_mask=global_valid,

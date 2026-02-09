@@ -177,6 +177,29 @@ def fov_id_from_zarr_path(zarr_path: str) -> str:
     return base.split("_")[-1].split(".")[0]
 
 
+def _fov_id_variants(fov_id: str) -> List[str]:
+    """Return both '040' and '40' style variants for a FOV id."""
+    stripped = fov_id.lstrip("0") or "0"
+    padded = fov_id.zfill(3)
+    seen = []
+    for v in [fov_id, stripped, padded]:
+        if v not in seen:
+            seen.append(v)
+    return seen
+
+
+def lookup_fov_anchor(fov_index: Dict[str, Tuple[float, float]], fov_id: str) -> Tuple[float, float]:
+    """Look up FOV anchor, trying both '040' and '40' variants."""
+    for v in _fov_id_variants(fov_id):
+        if v in fov_index:
+            return fov_index[v]
+    raise KeyError(
+        f"FOV '{fov_id}' not found in anchor index. "
+        f"Tried: {_fov_id_variants(fov_id)}. "
+        f"Available: {list(fov_index.keys())[:10]}..."
+    )
+
+
 def build_fov_anchor_index(fls_: List[str], xs: np.ndarray, ys: np.ndarray) -> Dict[str, Tuple[float, float]]:
     if len(fls_) != len(xs) or len(fls_) != len(ys):
         raise ValueError("fls_, xs, ys length mismatch")
