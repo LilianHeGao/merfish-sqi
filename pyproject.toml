@@ -9,8 +9,19 @@ dependencies = [
   "matplotlib",
   "tifffile",
   "zarr",
-  "cellpose"
+  "cellpose",
+  "spotiflow",
+  "pandas",
+  "pyarrow",
 ]
 
 [tool.setuptools]
-packages = ["sqi", "segmentation"]
+packages = [
+  "sqi",
+  "sqi.io",
+  "sqi.qc",
+  "sqi.spatial",
+  "sqi.spot_calling",
+  "sqi.spot_features",
+  "segmentation",
+]
