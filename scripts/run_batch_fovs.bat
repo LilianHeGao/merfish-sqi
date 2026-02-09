@@ -2,10 +2,10 @@
 REM Batch run SQI pipeline for multiple FOVs.
 REM Usage: run_batch_fovs.bat
 
-set DATA_FLD=\\192.168.0.116\durian3\Lilian\022425_FTD_smFISH_MBP_NRGN\coverslip3_FTD_group2\MBP_NRGN_set1
-set CACHE_ROOT=\\192.168.0.116\durian3\Lilian\merfish_sqi_cache
-set OUT_ROOT=output\022425_FTD_smFISH_MBP_NRGN\coverslip3_FTD_group2\MBP_NRGN_set1
-set FOV_LIST=20 40
+set DATA_FLD=\\192.168.0.73\papaya13\Sasha\20251105_6OHDA\H1\H1_PTBP1_TH_GFAP_set11
+set CACHE_ROOT=\\192.168.0.73\papaya13\Lilian\merfish_sqi_cache
+set OUT_ROOT=output\20251105_6OHDA\H1\H1_PTBP1_TH_GFAP_set11
+set FOV_LIST=057 101
 
 REM Extract set number from DATA_FLD (e.g. MBP_NRGN_set5 → 5)
 for %%P in (%DATA_FLD%) do set _LAST_DIR=%%~nxP
