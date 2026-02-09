@@ -98,6 +98,7 @@ conda create -n sqi python=3.11 -y
 conda activate sqi
 
 pip install -e .
+conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia --solver=libmamba
 ```
 
 ### Run on a single FOV
