@@ -2,18 +2,21 @@
 REM Batch run SQI pipeline for multiple FOVs.
 REM Usage: run_batch_fovs.bat
 
-set DATA_FLD=\\192.168.0.116\durian3\Lilian\022425_FTD_smFISH_MBP_NRGN\coverslip1_controls\MBP_NRGN_set5
+set DATA_FLD=\\192.168.0.116\durian3\Lilian\022425_FTD_smFISH_MBP_NRGN\coverslip3_FTD_group2\MBP_NRGN_set1
 set CACHE_ROOT=\\192.168.0.116\durian3\Lilian\merfish_sqi_cache
-set OUT_ROOT=output\022425_FTD_smFISH_MBP_NRGN\coverslip1_controls\MBP_NRGN_set5
-set ZARR_BASE=%DATA_FLD%
+set OUT_ROOT=output\022425_FTD_smFISH_MBP_NRGN\coverslip3_FTD_group2\MBP_NRGN_set1
 set FOV_LIST=20 40
+
+REM Extract set number from DATA_FLD (e.g. MBP_NRGN_set5 → 5)
+for %%P in (%DATA_FLD%) do set _LAST_DIR=%%~nxP
+set ZSCAN_NUM=%_LAST_DIR:*set=%
 
 for %%F in (%FOV_LIST%) do (
     echo ============================================================
     echo Processing FOV %%F ...
     echo ============================================================
     python scripts\run_sqi_from_fov_zarr.py ^
-        --fov_zarr   "%ZARR_BASE%\Conv_zscan5_%%F.zarr" ^
+        --fov_zarr   "%DATA_FLD%\Conv_zscan%ZSCAN_NUM%_%%F.zarr" ^
         --data_fld   "%DATA_FLD%" ^
         --cache_root "%CACHE_ROOT%" ^
         --out_root   "%OUT_ROOT%"
