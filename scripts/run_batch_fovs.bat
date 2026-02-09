@@ -2,12 +2,13 @@
 REM Batch run SQI pipeline for multiple FOVs.
 REM Usage: run_batch_fovs.bat
 
-set DATA_FLD=\\192.168.0.116\durian3\Lilian\022425_FTD_smFISH_MBP_NRGN\coverslip2_FTD_group1\MBP_NRGN_set1
+set DATA_FLD=\\192.168.0.116\durian3\Lilian\022425_FTD_smFISH_MBP_NRGN\coverslip1_controls\MBP_NRGN_set5
 set CACHE_ROOT=\\192.168.0.116\durian3\Lilian\merfish_sqi_cache
-set OUT_ROOT=output
-set ZARR_BASE=\\192.168.0.116\durian3\Lilian\022425_FTD_smFISH_MBP_NRGN\coverslip2_FTD_group1\MBP_NRGN_set1
+set OUT_ROOT=output\022425_FTD_smFISH_MBP_NRGN\coverslip1_controls\MBP_NRGN_set5
+set ZARR_BASE=\\192.168.0.116\durian3\Lilian\022425_FTD_smFISH_MBP_NRGN\coverslip1_controls\MBP_NRGN_set5
+set FOV_LIST=020 040
 
-for %%F in (020 040) do (
+for %%F in (%FOV_LIST%) do (
     echo ============================================================
     echo Processing FOV %%F ...
     echo ============================================================

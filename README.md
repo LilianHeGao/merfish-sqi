@@ -98,7 +98,13 @@ conda create -n sqi python=3.11 -y
 conda activate sqi
 
 pip install -e .
+
+# GPU PyTorch (CUDA 12.1) — must come AFTER pip install to avoid conflicts
 conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia --solver=libmamba
+
+# Fix OpenMP duplicate library error (Windows)
+conda env config vars set KMP_DUPLICATE_LIB_OK=TRUE -n sqi
+conda activate sqi
 ```
 
 ### Run on a single FOV
