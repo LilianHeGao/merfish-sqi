@@ -34,8 +34,8 @@ from sqi.qc.valid_mask_mosaic import crop_valid_mask_for_fov
 from sqi.qc.rings import (
     CellProximalConfig, build_cell_proximal_and_distal_masks, per_cell_fg_bg,
 )
-from sqi.qc.metrics import compute_sqi_from_label_maps
-from sqi.qc.qc_plots import plot_sqi_distribution
+from sqi.qc.metrics import compute_sqi_from_label_maps, sqi_sanity_check
+from sqi.qc.qc_plots import plot_sqi_distribution, plot_sqi_real_vs_null
 from sqi.spot_calling.spotiflow_backend import SpotiflowBackend, SpotiflowConfig
 from sqi.spot_features.features import compute_spot_features, SpotFeatureConfig
 from sqi.spot_features.quality import compute_quality_scores
@@ -281,6 +281,22 @@ def main(args):
         fg_label_map, bg_label_map, spots_df,
     )
 
+    # --- Sanity check: real vs null SQI ---
+    spots_pass = spots_df[spots_df["pass_conservative"]].copy()
+    spots_int = np.column_stack([
+        np.clip(spots_pass["row"].values.astype(np.int32), 0, fg_label_map.shape[0] - 1),
+        np.clip(spots_pass["col"].values.astype(np.int32), 0, fg_label_map.shape[1] - 1),
+    ])
+    weights = spots_pass["q_score"].values.astype(np.float32)
+    real_sqi_sc, null_sqi_sc = sqi_sanity_check(
+        fg_label_map, bg_label_map, spots_int, weights,
+    )
+    real_vals_sc = np.array([v for v in real_sqi_sc.values() if np.isfinite(v) and v > 0])
+    null_vals_sc = np.array([v for v in null_sqi_sc.values() if np.isfinite(v) and v > 0])
+    print(f"       sanity check: real median={np.median(real_vals_sc):.2f}, "
+          f"null median={np.median(null_vals_sc):.2f}"
+          if len(real_vals_sc) and len(null_vals_sc) else "       sanity check: insufficient data")
+
     # --- Save results ---
     vals = np.array([v for v in sqi_total.values() if np.isfinite(v) and v > 0])
     summary = {
@@ -347,6 +363,14 @@ def main(args):
     fig.tight_layout()
     fig.savefig(str(out_dir / "sqi_distribution.png"), dpi=200)
     plt.close(fig)
+
+    # Sanity check plot: real vs null
+    fig_sc, ax_sc = plt.subplots(figsize=(5, 3.5))
+    plot_sqi_real_vs_null(real_sqi_sc, null_sqi_sc, ax=ax_sc,
+                          title=f"SQI sanity check — FOV {fov_id}")
+    fig_sc.tight_layout()
+    fig_sc.savefig(str(out_dir / "sqi_sanity_check.png"), dpi=200)
+    plt.close(fig_sc)
 
     print("=" * 50)
     print(f"[DONE] FOV {fov_id}")

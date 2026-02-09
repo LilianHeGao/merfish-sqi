@@ -53,3 +53,78 @@ def compute_sqi_from_label_maps(
             )
 
     return sqi, fg_counts, bg_counts
+
+
+def sqi_sanity_check(
+    fg_label_map: np.ndarray,
+    bg_label_map: np.ndarray,
+    spots_rc: np.ndarray,
+    spot_weights=None,
+    *,
+    seed: int = 42,
+):
+    """
+    Null-model sanity check for the SQI metric.
+
+    For each cell, count its real spots, then uniformly sample the same
+    number of pseudo-spots from that cell's valid-tissue territory
+    (FG ∪ BG Voronoi region).  Re-run SQI on the pseudo-spots.
+
+    If the metric works, real SQI >> 1 while null SQI ≈ 1.
+
+    Returns
+    -------
+    real_sqi : dict {cell_id: float}
+    null_sqi : dict {cell_id: float}
+    """
+    # --- real SQI ---
+    real_sqi, _, _ = compute_sqi_from_label_maps(
+        fg_label_map, bg_label_map, spots_rc, spot_weights,
+    )
+
+    # --- count actual (unweighted) spots per cell ---
+    cell_counts = {}
+    for r, c in spots_rc:
+        lab = fg_label_map[r, c]
+        if lab == 0:
+            lab = bg_label_map[r, c]
+        if lab > 0:
+            cell_counts[lab] = cell_counts.get(lab, 0) + 1
+
+    # --- build per-cell pixel pool (valid tissue = FG ∪ BG) ---
+    combined = np.where(fg_label_map > 0, fg_label_map, bg_label_map)
+    rows, cols = np.where(combined > 0)
+    labs = combined[rows, cols]
+
+    order = np.argsort(labs)
+    rows, cols, labs = rows[order], cols[order], labs[order]
+    unique_labs, starts, counts = np.unique(
+        labs, return_index=True, return_counts=True,
+    )
+    pool = {}
+    for i, lab in enumerate(unique_labs):
+        s = starts[i]
+        pool[lab] = np.column_stack([rows[s : s + counts[i]],
+                                     cols[s : s + counts[i]]])
+
+    # --- sample pseudo-spots, matching per-cell real count ---
+    rng = np.random.default_rng(seed)
+    pseudo_list = []
+    for lab, n in cell_counts.items():
+        px = pool.get(lab)
+        if px is None or len(px) == 0:
+            continue
+        idx = rng.choice(len(px), size=n, replace=True)
+        pseudo_list.append(px[idx])
+
+    if not pseudo_list:
+        return real_sqi, {}
+
+    pseudo_spots = np.concatenate(pseudo_list, axis=0)
+
+    # --- null SQI (unit weights — pure spatial test) ---
+    null_sqi, _, _ = compute_sqi_from_label_maps(
+        fg_label_map, bg_label_map, pseudo_spots, spot_weights=None,
+    )
+
+    return real_sqi, null_sqi
