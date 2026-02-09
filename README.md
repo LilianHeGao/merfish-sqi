@@ -1,4 +1,4 @@
-<p align="center">
+<p align="leftr">
   <img src="assets/sqi_logo.png" width="320"/>
 </p>
 
