@@ -5,7 +5,7 @@ REM Usage: run_batch_fovs.bat
 set DATA_FLD=\\192.168.0.73\Papaya13\Sasha\20251105_6OHDA\H1\H1_PTBP1_TH_GFAP_set11
 set CACHE_ROOT=\\192.168.0.73\Papaya13\Lilian\merfish_sqi_cache
 set OUT_ROOT=output\20251105_6OHDA\H1\H1_PTBP1_TH_GFAP_set11
-set FOV_LIST=057 10s1
+set FOV_LIST=057 101
 
 REM Extract set number from DATA_FLD (e.g. MBP_NRGN_set5 → 5)
 for %%P in (%DATA_FLD%) do set _LAST_DIR=%%~nxP
