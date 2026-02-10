@@ -54,7 +54,7 @@ def main():
                         help="Not used for computation, only for consistency")
     parser.add_argument("--out", default="orientation_test.png",
                         help="Output figure path (default: orientation_test.png)")
-    parser.add_argument("--n_tiles", type=int, default=30,
+    parser.add_argument("--n_tiles", type=int, default=80,
                         help="Max tiles to use (default: 30, for speed)")
     parser.add_argument("--resc", type=int, default=4)
     parser.add_argument("--icol", type=int, default=1)
