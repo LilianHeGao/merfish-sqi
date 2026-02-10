@@ -83,7 +83,7 @@ def plot_sqi_real_vs_null(
 # ---------------------------
 
 def plot_tissue_overview(
-    tissue_mask: np.ndarray,
+    mosaic_img: np.ndarray,
     fov_bboxes: Sequence[Tuple[int, int, int, int]],
     fov_labels: Sequence[str],
     *,
@@ -91,16 +91,18 @@ def plot_tissue_overview(
     out_path: Optional[str] = None,
 ):
     """
-    Display mosaic-level tissue mask with FOV bounding boxes highlighted.
+    Display mosaic image with FOV bounding boxes highlighted.
 
     Parameters
     ----------
-    tissue_mask : (H, W) bool at mosaic resolution.
+    mosaic_img  : (H, W) float32 mosaic image at mosaic resolution.
     fov_bboxes  : list of (r0, c0, r1, c1) in mosaic pixel coords.
     fov_labels  : list of FOV id strings (same length as fov_bboxes).
     """
     fig, ax = plt.subplots(figsize=(8, 8))
-    ax.imshow(tissue_mask.astype(np.uint8), cmap="gray", vmin=0, vmax=1)
+    vmin = np.percentile(mosaic_img, 1)
+    vmax = np.percentile(mosaic_img, 99.5)
+    ax.imshow(mosaic_img, cmap="gray", vmin=vmin, vmax=vmax)
 
     for (r0, c0, r1, c1), label in zip(fov_bboxes, fov_labels):
         rect = Rectangle((c0, r0), c1 - c0, r1 - r0,

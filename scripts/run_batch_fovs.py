@@ -30,18 +30,6 @@ def discover_fov_zarrs(data_fld: str) -> list[str]:
     return sorted(glob.glob(pattern))
 
 
-def get_or_build_tissue_mask(mosaic_tif: str, cache_root: str) -> np.ndarray:
-    mask_tif = mosaic_tif.replace(".tiff", "_tissue_mask.tiff")
-    if os.path.exists(mask_tif):
-        return tiff.imread(mask_tif).astype(bool)
-    from build_tissue_mask_qupath_style import build_tissue_mask_qupath_style
-    mosaic = tiff.imread(mosaic_tif).astype(np.float32)
-    mask = build_tissue_mask_qupath_style(mosaic, downsample=4)
-    tiff.imwrite(mask_tif, mask.astype(np.uint8))
-    print("[INFO] Saved tissue mask:", mask_tif)
-    return mask
-
-
 def get_fov_shape_from_zarr(zarr_path: str, resc: int) -> tuple[int, int]:
     """Read one zarr to get the FOV shape at full resolution."""
     im = read_multichannel_from_conv_zarr(zarr_path)
@@ -143,7 +131,7 @@ def main():
     fov_index = build_fov_anchor_index(fls_, xs, ys)
 
     mosaic_tif, _ = mosaic_cache_paths(args.data_fld, mosaic_cfg, args.cache_root)
-    tissue_mask = get_or_build_tissue_mask(mosaic_tif, args.cache_root)
+    mosaic_img = tiff.imread(mosaic_tif).astype(np.float32)
 
     # Get FOV shape from the first selected zarr
     fov_shape = get_fov_shape_from_zarr(selected[0], args.resc)
@@ -161,7 +149,7 @@ def main():
 
     dataset_name = os.path.basename(args.data_fld)
     plot_tissue_overview(
-        tissue_mask, bboxes, labels,
+        mosaic_img, bboxes, labels,
         title=f"Tissue overview — {dataset_name} ({n_pick} FOVs)",
         out_path=str(out_root / "tissue_overview.png"),
     )
