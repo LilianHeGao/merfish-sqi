@@ -12,6 +12,13 @@ A lightweight QC toolkit that scores **sample-level RNA integrity** in smFISH sp
 
 Most spatial transcriptomics pipelines focus on downstream spot calling, decoding, and segmentation — but the starting point - whether the **biological sample** is any good is still judged by eye. SQI replaces that with a single, reproducible number.
 
+**Human control (smFISH) — good separation:**
+
+<p align="center">
+  <img src="assets/examples/human_control/masks_overlay.png" width="45%"/>
+  <img src="assets/examples/human_control/sqi_sanity_check.png" width="45%"/>
+</p>
+
 ## What it measures
 
 For each cell, SQI computes a signal-to-noise ratio:
@@ -125,13 +132,6 @@ Not every tissue is suitable for FG/BG-based QC. SQI includes a built-in reliabi
 ```
 WARNING: FG/BG separation insufficient for this FOV (AUC=0.53), SQI may not be informative.
 ```
-**Human control (smFISH) — good separation:**
-
-<p align="center">
-  <img src="assets/examples/human_control/masks_overlay.png" width="45%"/>
-  <img src="assets/examples/human_control/sqi_sanity_check.png" width="45%"/>
-</p>
-
 **Mouse brain (6-OHDA) — dense tissue, SQI unreliable:**
 
 <p align="center">
