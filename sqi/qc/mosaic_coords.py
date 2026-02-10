@@ -23,52 +23,72 @@ class MosaicBuildConfig:
     um_per_pix_native: float = 0.1083333
     force: bool = False
 
-def compose_mosaic(ims,xs_um,ys_um,ims_c=None,um_per_pix=0.108333,rot = 0,return_coords=False):
+def compose_mosaic(ims, xs_um, ys_um, ims_c=None, um_per_pix=0.108333, rot=0, return_coords=False):
+    """
+    Compose a mosaic from tiles.
+
+    Coordinate convention:
+    - xs_um (stage_x) -> COLUMNS in the mosaic
+    - ys_um (stage_y) -> ROWS in the mosaic
+    - NumPy indexing: im[row, col]
+
+    If return_coords: returns (mosaic, xs_center, ys_center) where
+      xs_center = column centers, ys_center = row centers.
+    """
     dtype = np.float32
     im_ = ims[0]
     szs = im_.shape
-    sx,sy = szs[-2],szs[-1]
-    ### Apply rotation:
-    theta=-np.deg2rad(rot)
-    xs_um_ = np.array(xs_um)*np.cos(theta)-np.array(ys_um)*np.sin(theta)
-    ys_um_ = np.array(ys_um)*np.cos(theta)+np.array(xs_um)*np.sin(theta)
-    ### Calculate per pixel
-    xs_pix = np.array(xs_um_)/um_per_pix
-    xs_pix = np.array(xs_pix-np.min(xs_pix),dtype=int)
-    ys_pix = np.array(ys_um_)/um_per_pix
-    ys_pix = np.array(ys_pix-np.min(ys_pix),dtype=int)
-    sx_big = np.max(xs_pix)+sx+1
-    sy_big = np.max(ys_pix)+sy+1
-    dim = [sx_big,sy_big]
-    if len(szs)==3:
-        dim = [szs[0],sx_big,sy_big]
+    tile_h, tile_w = szs[-2], szs[-1]
+
+    # Apply rotation to coordinates
+    theta = -np.deg2rad(rot)
+    xs_um_ = np.array(xs_um) * np.cos(theta) - np.array(ys_um) * np.sin(theta)
+    ys_um_ = np.array(ys_um) * np.cos(theta) + np.array(xs_um) * np.sin(theta)
+
+    # x (stage) -> column index,  y (stage) -> row index
+    cols_pix = np.array(xs_um_ / um_per_pix, dtype=float)
+    cols_pix = np.array(cols_pix - np.min(cols_pix), dtype=int)
+
+    rows_pix = np.array(ys_um_ / um_per_pix, dtype=float)
+    rows_pix = np.array(rows_pix - np.min(rows_pix), dtype=int)
+
+    canvas_h = np.max(rows_pix) + tile_h + 1
+    canvas_w = np.max(cols_pix) + tile_w + 1
+
+    if len(szs) == 3:
+        dim = [szs[0], canvas_h, canvas_w]
+    else:
+        dim = [canvas_h, canvas_w]
 
     if ims_c is None:
-        if len(ims)>25:
+        if len(ims) > 25:
             try:
-                ims_c = linear_flat_correction(ims,fl=None,reshape=False,resample=1,vec=[0.1,0.15,0.25,0.5,0.65,0.75,0.9])
+                ims_c = linear_flat_correction(ims, fl=None, reshape=False, resample=1,
+                                               vec=[0.1, 0.15, 0.25, 0.5, 0.65, 0.75, 0.9])
             except:
-                imc_c = np.median(ims,axis=0)
+                ims_c = np.median(ims, axis=0)
         else:
-            ims_c = np.median(ims,axis=0)
+            ims_c = np.median(ims, axis=0)
 
-    im_big = np.zeros(dim,dtype = dtype)
-    sh_ = np.nan
-    for i,(im_,x_,y_) in enumerate(zip(ims,xs_pix,ys_pix)):
+    im_big = np.zeros(dim, dtype=dtype)
+
+    for i, (im_, r0, c0) in enumerate(zip(ims, rows_pix, cols_pix)):
         if ims_c is not None:
-            if len(ims_c)==2:
-                im_coef,im_inters = np.array(ims_c,dtype = 'float32')
-                im__=(np.array(im_,dtype = 'float32')-im_inters)/im_coef
+            if len(ims_c) == 2:
+                im_coef, im_inters = np.array(ims_c, dtype='float32')
+                im__ = (np.array(im_, dtype='float32') - im_inters) / im_coef
             else:
-                ims_c_ = np.array(ims_c,dtype = 'float32')
-                im__=np.array(im_,dtype = 'float32')/ims_c_*np.median(ims_c_)
+                ims_c_ = np.array(ims_c, dtype='float32')
+                im__ = np.array(im_, dtype='float32') / ims_c_ * np.median(ims_c_)
         else:
-            im__=np.array(im_,dtype = 'float32')
-        im__ = np.array(im__,dtype = dtype)
-        im_big[...,x_:x_+sx,y_:y_+sy]=im__
-        sh_ = im__.shape
+            im__ = np.array(im_, dtype='float32')
+        im__ = np.array(im__, dtype=dtype)
+        im_big[..., r0:r0 + tile_h, c0:c0 + tile_w] = im__
+
     if return_coords:
-        return im_big,xs_pix+sh_[-2]/2,ys_pix+sh_[-1]/2
+        xs_center = cols_pix + tile_w / 2   # x (stage) -> column center
+        ys_center = rows_pix + tile_h / 2   # y (stage) -> row center
+        return im_big, xs_center, ys_center
     return im_big
 
 def mosaic_cache_paths(
@@ -84,7 +104,8 @@ def mosaic_cache_paths(
     mosaic_dir = os.path.join(cache_root, "_mosaic")
     os.makedirs(mosaic_dir, exist_ok=True)
 
-    base = f"{os.path.basename(data_fld)}_frame{cfg.frame}_col{cfg.icol}_resc{cfg.resc}_rescz{cfg.rescz}"
+    # _v2 suffix: coordinate fix (row/col swap), invalidates old caches
+    base = f"{os.path.basename(data_fld)}_frame{cfg.frame}_col{cfg.icol}_resc{cfg.resc}_rescz{cfg.rescz}_v2"
     if cfg.rot_k != 2:
         base += f"_rotk{cfg.rot_k}"
     mosaic_tif = os.path.join(mosaic_dir, base + ".tiff")
@@ -203,9 +224,15 @@ def lookup_fov_anchor(fov_index: Dict[str, Tuple[float, float]], fov_id: str) ->
 
 
 def build_fov_anchor_index(fls_: List[str], xs: np.ndarray, ys: np.ndarray) -> Dict[str, Tuple[float, float]]:
+    """
+    Build mapping from FOV id to (row_center, col_center) in mosaic pixels.
+
+    xs from compose_mosaic = column centers, ys = row centers.
+    We store as (row, col) to match NumPy / crop_valid_mask_for_fov convention.
+    """
     if len(fls_) != len(xs) or len(fls_) != len(ys):
         raise ValueError("fls_, xs, ys length mismatch")
     out: Dict[str, Tuple[float, float]] = {}
     for p, x, y in zip(fls_, xs, ys):
-        out[fov_id_from_zarr_path(p)] = (float(x), float(y))
+        out[fov_id_from_zarr_path(p)] = (float(y), float(x))  # (row, col)
     return out

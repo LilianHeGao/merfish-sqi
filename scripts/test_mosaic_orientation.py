@@ -127,9 +127,11 @@ def main():
         ax.imshow(img, cmap="gray", vmin=vmin, vmax=vmax)
 
         # Annotate FOV ids
+        # xs = column centers, ys = row centers from compose_mosaic
+        # ax.text(x, y) expects (col, row) for imshow
         for x_, y_, fl_ in zip(xs, ys, fls_):
             fov_id = os.path.basename(fl_).split("_")[-1].split(".")[0]
-            ax.text(y_ / ds, x_ / ds, fov_id, color="red", fontsize=4,
+            ax.text(x_ / ds, y_ / ds, fov_id, color="red", fontsize=4,
                     ha="center", va="center")
 
         ax.set_title(f"rot_k={k}", fontsize=14)
