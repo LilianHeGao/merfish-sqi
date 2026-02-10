@@ -17,11 +17,11 @@ Most spatial transcriptomics pipelines focus on spot calling, decoding, and segm
 For each cell, SQI computes a signal-to-noise ratio:
 
 ```
-SQI(cell) = spot_density(cell-proximal) / spot_density(cell-distal)
+SQI(cell) = weighted_spot_density(cell-proximal) / weighted_spot_density(cell-distal)
 ```
 
-- **SQI >> 1** → RNA concentrates near cells → good sample
-- **SQI ≈ 1** → RNA diffusely spread → likely degraded
+- **SQI >> 1** → high quality RNA concentrates near cells → good sample
+- **SQI ≈ 1** → RNA diffusely spread with low quality→ likely degraded
 
 Per-cell scores are aggregated to a FOV-level summary. A built-in null model (uniform pseudo-spots) validates that the metric is capturing real signal, not noise.
 
