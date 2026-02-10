@@ -108,6 +108,11 @@ Example QC reports from **human Frontotemporal Dementia (FTD)** cases.
 Each example shows the full 5-panel per-FOV QC report:
 tissue overview, per-channel projections with spots, masks overlay, SQI distribution, and sanity check.
 
+<p align="center">
+  <img src="assets/examples/human_FTD/tissue_overview.png" width="30%"/>
+  <img src="assets/examples/human_FTD/channel_projections.png" width="30%"/>
+  <img src="assets/examples/human_FTD/sqi_distribution.png" width="30%"/>
+</p>
 ## Reliability check
 
 Not every tissue is suitable for FG/BG-based QC. SQI includes a built-in reliability check using the sanity-check AUC — the separation between real spot SQI and null (uniformly sampled) SQI.
