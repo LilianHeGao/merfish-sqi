@@ -23,7 +23,7 @@ SQI(cell) = weighted_spot_density(cell-proximal) / weighted_spot_density(cell-di
 - **SQI >> 1** → high quality RNA concentrates near cells → good sample
 - **SQI ≈ 1** → RNA diffusely spread with low quality → likely degraded
 
-Per-cell scores are aggregated to a FOV-level summary. A built-in null model (uniform pseudo-spots) validates that the metric is capturing real signal, not noise.
+Per-cell scores are aggregated to a FOV-level summary. A built-in null model (assume uniform distributed-spots) validates that the metric is capturing real signal, not noise.
 
 **Scope:** designed for sparse-to-moderate density tissues. In very dense tissues (e.g. mouse brain), foreground/background separation breaks down — and SQI will tell you so automatically (see [Reliability check](#reliability-check) below).
 
