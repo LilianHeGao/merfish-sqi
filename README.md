@@ -143,7 +143,7 @@ WARNING: FG/BG separation insufficient for this FOV (AUC=0.53), SQI may not be i
 This typically happens when tissue is too dense for a clear background region to exist (e.g. mouse brain), or when the sample is severely degraded. The flag is reported in `sqi_summary.json` so batch-level analysis can filter accordingly.
 
 <p align="center">
-  <img src="assets/examples/auc_across_conditions.png" width="60%"/>
+  <img src="assets/examples/auc_comparison.png" width="60%"/>
 </p>
 
 In the example above, human control tissue (AUC ~0.7) passes reliably, while human FTD (disease-affected, AUC ~0.55) and mouse brain (high density, AUC ~0.55) are flagged — for different biological reasons, but with the same practical consequence: SQI scores on those FOVs should be interpreted with caution.
