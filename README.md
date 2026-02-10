@@ -10,7 +10,7 @@ A lightweight QC toolkit that scores **sample-level RNA integrity** in smFISH sp
 
 ## The problem
 
-Most spatial transcriptomics pipelines focus on spot calling, decoding, and segmentation — but whether the **sample itself** is any good is still judged by eye. SQI replaces that with a single, reproducible number.
+Most spatial transcriptomics pipelines focus on downstream spot calling, decoding, and segmentation — but the starting point - whether the **sample itself** is any good is still judged by eye. SQI replaces that with a single, reproducible number.
 
 ## What it measures
 
