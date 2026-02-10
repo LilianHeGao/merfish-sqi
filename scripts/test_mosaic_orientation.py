@@ -12,7 +12,7 @@ python scripts/test_mosaic_orientation.py \
     --out orientation_test.png
 
 Optional:
-    --n_tiles 30       (default: use up to 30 tiles for speed)
+    --n_tiles 80       (default: use up to 30 tiles for speed)
     --resc 4           (mosaic downsample factor)
     --icol 1           (channel index to visualise)
     --frame 20         (z-frame index, or 'all' for max projection)
