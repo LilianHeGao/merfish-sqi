@@ -67,6 +67,9 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--resc", type=int, default=4,
                         help="Mosaic rescale factor (default: 4)")
+    parser.add_argument("--rot_k", type=int, default=2,
+                        help="Tile rotation before stitching: np.rot90 k (0-3, default: 2). "
+                             "Use test_mosaic_orientation.py to pick the right value.")
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
@@ -105,6 +108,7 @@ def main():
             "--cache_root", args.cache_root,
             "--out_root", args.out_root,
             "--resc", str(args.resc),
+            "--rot_k", str(args.rot_k),
         ]
         if args.force:
             cmd.append("--force")
@@ -124,7 +128,7 @@ def main():
     import matplotlib
     matplotlib.use("Agg")
 
-    mosaic_cfg = MosaicBuildConfig(resc=args.resc)
+    mosaic_cfg = MosaicBuildConfig(resc=args.resc, rot_k=args.rot_k)
     _, fls_, xs, ys = build_mosaic_and_coords(
         args.data_fld, mosaic_cfg, cache_root=args.cache_root, cache=True,
     )

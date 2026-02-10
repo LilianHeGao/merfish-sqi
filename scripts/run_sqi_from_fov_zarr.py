@@ -200,7 +200,7 @@ def main(args):
     # 3. Mosaic coordinates + tissue mask
     # =====================================================
     print("[3/7] Loading mosaic coordinates ...")
-    mosaic_cfg = MosaicBuildConfig(resc=resc, icol=1, frame=20, rescz=2)
+    mosaic_cfg = MosaicBuildConfig(resc=resc, icol=1, frame=20, rescz=2, rot_k=args.rot_k)
     _, fls_, xs, ys = build_mosaic_and_coords(
         args.data_fld, mosaic_cfg, cache_root=args.cache_root, cache=True,
     )
@@ -428,6 +428,8 @@ if __name__ == "__main__":
                         help="Spotiflow pretrained model (default: general)")
     parser.add_argument("--prob_thresh", type=float, default=0.5,
                         help="Spotiflow probability threshold (default: 0.5)")
+    parser.add_argument("--rot_k", type=int, default=2,
+                        help="Tile rotation for mosaic: np.rot90 k (0-3, default: 2)")
     parser.add_argument("--force", action="store_true",
                         help="Recompute all cached intermediates")
     main(parser.parse_args())

@@ -100,8 +100,12 @@ def plot_tissue_overview(
     fov_labels  : list of FOV id strings (same length as fov_bboxes).
     """
     fig, ax = plt.subplots(figsize=(8, 8))
-    vmin = np.percentile(mosaic_img, 1)
-    vmax = np.percentile(mosaic_img, 99.5)
+    nonzero = mosaic_img[mosaic_img > 0]
+    if len(nonzero) > 0:
+        vmin = np.percentile(nonzero, 1)
+        vmax = np.percentile(nonzero, 99)
+    else:
+        vmin, vmax = 0, 1
     ax.imshow(mosaic_img, cmap="gray", vmin=vmin, vmax=vmax)
 
     for (r0, c0, r1, c1), label in zip(fov_bboxes, fov_labels):

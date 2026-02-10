@@ -19,6 +19,7 @@ class MosaicBuildConfig:
     icol: int = 1
     frame: int = 20          # or 'all'
     rescz: int = 2
+    rot_k: int = 2           # np.rot90 k value (0-3), applied before T[::-1,::-1]
     um_per_pix_native: float = 0.1083333
     force: bool = False
 
@@ -84,6 +85,8 @@ def mosaic_cache_paths(
     os.makedirs(mosaic_dir, exist_ok=True)
 
     base = f"{os.path.basename(data_fld)}_frame{cfg.frame}_col{cfg.icol}_resc{cfg.resc}_rescz{cfg.rescz}"
+    if cfg.rot_k != 2:
+        base += f"_rotk{cfg.rot_k}"
     mosaic_tif = os.path.join(mosaic_dir, base + ".tiff")
     coords_npz = os.path.join(mosaic_dir, base + "_coords.npz")
     return mosaic_tif, coords_npz
@@ -143,8 +146,7 @@ def build_mosaic_and_coords(
     if not ims:
         raise RuntimeError("No images were successfully processed for mosaic.")
 
-    # Keep your exact transforms (as in your function)
-    rotated_ims = [np.rot90(im_, k=2) for im_ in ims]
+    rotated_ims = [np.rot90(im_, k=cfg.rot_k) for im_ in ims]
     tiles = [im_.T[::-1, ::-1] for im_ in rotated_ims]
 
     um_per_pix = cfg.um_per_pix_native * cfg.resc
