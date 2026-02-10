@@ -42,6 +42,14 @@ pip install -e .
 # GPU PyTorch (CUDA 12.1) — after pip install to avoid conflicts
 conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia --solver=libmamba
 ```
+### Check tile orientation first
+
+Different microscopes may rotate tiles differently. Run this once per dataset to pick the correct `--rot_k` value (0–3):
+```bash
+python scripts/test_mosaic_orientation.py \
+    --data_fld /path/to/parent_folder \
+    --out orientation_test.png
+```
 
 ```bash
 python scripts/run_sqi_from_fov_zarr.py \
