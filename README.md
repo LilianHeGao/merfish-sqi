@@ -122,6 +122,7 @@ tissue overview, per-channel projections with spots, masks overlay.
 <p align="center">
   <img src="assets/examples/human_FTD/sqi_distribution.png" width="100%"/>
 </p>
+
 ## Reliability check
 
 Not every tissue is suitable for FG/BG-based QC. SQI includes a built-in reliability check using the sanity-check AUC — the separation between real spot SQI and null (uniformly sampled) SQI.
