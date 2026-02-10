@@ -19,6 +19,7 @@ python scripts\run_batch_fovs.py ^
     --out_root   "%OUT_ROOT%" ^
     --n_fovs %FOV_NUM% ^
     --rot_k %ROT_K% ^
-    --seed 42
+    --seed 42 ^
+    --force
 
 pause
