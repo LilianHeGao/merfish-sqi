@@ -8,7 +8,7 @@
 
 A lightweight QC toolkit that scores **sample-level RNA integrity** in smFISH spatial transcriptomics, directly from images.
 
-## The problem
+## 🔍 The problem
 
 Most spatial transcriptomics pipelines focus on downstream spot calling, decoding, and segmentation — but the starting point - whether the **biological sample** is any good is still judged by eye. SQI replaces that with a single, reproducible number.
 
@@ -61,7 +61,7 @@ pip install -e .
 conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia --solver=libmamba
 ```
 
-### Check tile orientation first
+### 🧪 Check tile orientation first
 
 Different microscopes may rotate tiles differently. Run this once per dataset to pick the correct `--rot_k` value (0–3):
 
@@ -94,7 +94,7 @@ python scripts\run_batch_fovs.py ^
   --seed 42
 ```
 
-## Outputs
+## 📦 Outputs
 
 Each FOV produces a self-contained QC report:
 
@@ -140,7 +140,7 @@ Example QC report from a **human Frontotemporal Dementia (FTD)** case, showing t
   <img src="assets/examples/human_FTD/sqi_distribution.png" width="100%"/>
 </p>
 
-## Reliability check
+## ⚠️ Reliability check
 
 Not every tissue is suitable for FG/BG-based QC. SQI includes a built-in reliability check using the sanity-check AUC — the separation between real spot SQI and null (uniformly sampled) SQI.
 
